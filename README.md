@@ -1,50 +1,461 @@
-# 🤖 ai-branch-sync-workflow  
-> AI-assisted, human-in-the-loop workflow for safely synchronizing business logic across divergent Git branches (e.g., `develop` → `fusion`), **without overwriting platform-specific code**.
+# 🔄 AI Branch Sync Workflow
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![GitHub Repo size](https://img.shields.io/github/repo-size/YxI-I/ai-branch-sync-workflow)](https://github.com/YxI-I/ai-branch-sync-workflow)
-[![Last Commit](https://img.shields.io/github/last-commit/YxI-I/ai-branch-sync-workflow)](https://github.com/YxI-I/ai-branch-sync-workflow/commits/main)
-
----
-
-## 🌟 Why This Workflow?
-In complex projects with parallel branches (e.g., `main`, `develop`, `fusion`, `ios`, `android`), manual merges often:
-- ❌ Break platform-specific logic  
-- ❌ Introduce subtle regressions in business rules  
-- ❌ Waste engineer time on repetitive diff reconciliation  
-
-This workflow leverages **LLMs as intelligent diff assistants**, not auto-mergers — ensuring:
-- ✅ Critical logic is preserved  
-- ✅ Platform boundaries are respected  
-- ✅ Every change is audited by a human  
-
-> 🔑 **Core Principle**: *AI proposes, human approves.* No blind automation.
+> 面向多分支、多平台项目的 AI 辅助代码同步流程。
+>
+> 适用于以下场景：
+>
+> * `develop-xx` 分支包含新的业务改动，需要同步。
+> * `fusion-xx` 分支需要接收改动，但存在平台差异或特有代码。
+> * 两个分支整体结构相似，但因平台或部署环境存在差异。
 
 ---
 
-## 🧭 Workflow Overview
+# 📌 核心目标
 
-| Step | Phase | Key Action | Output |
-|------|-------|------------|--------|
-| 1 | 🔒 **Scope Lock** | Define time window & file scope (e.g., last 7 days, `/src/business/`) | `scope.json` |
-| 2 | ⚖️ **Rule Setting** | Declare “do not touch” patterns (e.g., `*Platform*.java`, `config/`) | `rules.yaml` |
-| 3 | 📄 **File-by-File Sync** | For each changed file: <br> • LLM compares `develop` vs `fusion` <br> • Generates patch + rationale | `patches/*.patch`, `rationales/*.md` |
-| 4 | 🧪 **Test Fixup** | Run tests → AI suggests minimal fixes for breakages | `test-fixes/*.diff` |
-| 5 | 🛠️ **Build & Test Loop** | Auto-retry build → AI refines patch until green | `build-log.md` |
-| 6 | 🔍 **Logic Audit** | Engineer reviews critical methods (e.g., `calculatePrice()`) using side-by-side diff | `audit-report.md` |
-| 7 | 📐 **Config Check** | Verify enums, constants, feature flags unchanged | `config-audit.txt` |
+本流程旨在：
 
-> 💡 All artifacts are versioned — you can replay or audit any sync run.
+* 仅同步“业务逻辑改动”
+* 保留目标分支的平台特有代码
+* 降低 AI 自动覆盖风险
+* 通过逐文件、逐方法校验提高同步可靠性
+* 建立可审计、可回溯的 AI 同步流程
 
 ---
 
-## 📥 Getting Started
+# 🧠 推荐使用模型
 
-### 1. Create your first README (you’re here!)
-✅ You’ve just done this! 👏
+建议使用支持长上下文与代码推理能力较强的大模型，例如：
 
-### 2. Initialize core files
-Run locally (or use GitHub’s web editor):
+* GPT-5.x
+* Claude Sonnet / Opus
+* Gemini Pro
+
+---
+
+# 📂 推荐目录结构
+
+```text
+.
+├── README.md
+├── prompt-sync-file.md
+├── prompt-audit-method.md
+└── examples/
+    ├── sample-diff.patch
+    └── sample-analysis.md
+```
+
+---
+
+# ⚠️ 同步原则（非常重要）
+
+## 必须遵守
+
+1. 保留 fusion 分支中的平台专属逻辑
+2. 不允许直接覆盖整个文件
+3. 不同步历史遗留差异
+4. 仅同步指定时间范围内的业务改动
+5. 必须逐文件处理
+6. 修改后必须编译 + 测试
+7. 核心方法必须进行二次逻辑审计
+
+---
+
+# 🛡️ Safe File Sync Prompt
+
+建议搭配 `prompt-sync-file.md` 使用。
+
+该 Prompt 用于：
+
+* 对比 develop 与 fusion 同名文件
+* 自动过滤平台代码
+* 输出安全 patch
+* 生成变更分析与风险提示
+
+适用于：
+
+* `OrderService.java`
+* `PaymentValidator.kt`
+* `XXXServiceImpl.java`
+* 核心业务服务类
+
+---
+
+# 🚀 标准执行流程
+
+---
+
+# 第一步：锁定范围，整理差异清单
+
+## 🎯 目标
+
+基于时间范围筛选 develop 分支改动。
+
+避免：
+
+* 历史遗留差异被误同步
+* AI 将旧逻辑误判为新改动
+
+---
+
+## ✅ 操作步骤
+
+1. 切换到源分支（如 `develop-xx`）
+2. 确定需要同步的时间范围
+3. 让 AI 生成去重后的改动文件清单
+
+---
+
+## 💬 Prompt
+
+```text
+请总结 develop-xx 分支从 2026.4.22 15:00 到 2026.5.6 16:14 之间的所有提交。
+请列出该范围内所有改动过的文件（去重），并提供一份包含“文件名”和“简单概述修改内容”的清单。
+```
+
+---
+
+# 第二步：明确规则，分析目标差异
+
+## 🎯 目标
+
+让 AI 理解 fusion 分支中的“不可修改区域”。
+
+建立同步边界。
+
+---
+
+## ✅ 操作步骤
+
+1. 切换到目标分支（如 `fusion-xx`）
+2. 将第一步生成的文件清单提供给 AI
+3. 明确说明 fusion 分支的特殊逻辑
+4. 要求 AI 后续逐文件同步
+
+---
+
+## 💬 Prompt
+
+```text
+这是 develop-xx 的改动清单。我现在需要把这些改动同步到当前的 fusion-xx 分支。
+请先整体分析一遍差异，随后我将一个文件一个文件地让你执行同步。
+
+核心规则：
+1. 目标分支 fusion-xx 有独有的代码逻辑，同步时必须保留，严禁覆盖。
+2. 不要同步 develop-xx 中非修改业务的差异。
+3. 请按我的指令逐个文件处理。
+```
+
+---
+
+# 第三步：逐文件智能同步
+
+## 🎯 目标
+
+精细化合并业务逻辑。
+
+确保：
+
+* develop 新业务逻辑被迁移
+* fusion 平台逻辑被保留
+
+---
+
+## ✅ 操作步骤
+
+1. 从清单中取出一个文件
+2. 提供 develop 与 fusion 两个版本
+3. 让 AI 输出安全 patch
+
+---
+
+## 💬 Prompt
+
+```text
+请同步文件：ReportOfPassRateServiceImpl.java
+
+执行要求：
+1. 对比 develop-xx 和 fusion-xx 分支中该文件的差异。
+2. 识别出 develop-xx 在指定范围内的业务改动。
+3. 将这些改动合并到 fusion-xx 的当前文件中，务必保留 fusion-xx 原有的差异代码。
+```
+
+---
+
+# 第四步：修复测试文件
+
+## 🎯 目标
+
+修复因业务签名变化导致的测试失败。
+
+---
+
+## 常见问题
+
+* 方法参数类型变化
+* 新依赖未 Mock
+* Mock 返回值缺失
+* 构造函数变化
+* Bean 初始化失败
+
+---
+
+## 💬 Prompt
+
+```text
+请修复所有测试文件中对应的调用错误。
+
+常见修复点：
+- 方法参数类型变更（例如：List<Long> 变为 Long）。
+- 新增的依赖类需要添加 @Mock 注解。
+- 新调用的方法需要补充 Mock 返回值。
+- 构造函数参数变更导致的实例化错误。
+```
+
+---
+
+# 第五步：编译与测试验证
+
+## 🎯 目标
+
+建立快速反馈循环。
+
+及时发现：
+
+* 漏同步
+* Mock 缺失
+* import 错误
+* Bean 依赖错误
+* API 签名不一致
+
+---
+
+## ✅ 操作建议
+
+每同步 1~3 个文件：
+
 ```bash
-touch {RULES.md,GUIDE.md}.md .gitignore
-echo "node_modules/" > .gitignore
+mvn test
+```
+
+或者：
+
+```bash
+gradle test
+```
+
+出现错误时：
+
+直接将编译日志投喂给 AI 修复。
+
+---
+
+# 第六步：逐接口 / 方法逻辑核对
+
+## 🎯 目标
+
+防止 AI：
+
+* 漏掉某段逻辑
+* 错误合并 if/else
+* 修改边界条件
+* 引入隐藏回归
+
+这是最重要的一步。
+
+---
+
+## ✅ 建议核查内容
+
+优先检查：
+
+* ServiceImpl
+* Validator
+* Rule Engine
+* Strategy
+* 核心聚合逻辑
+* 复杂条件分支
+
+---
+
+## 💬 Prompt
+
+```text
+请对比 develop-xx 和 fusion-xx 分支中 XXXServiceImpl 类的 methodName 方法。
+请逐行 Diff，确认两个分支的逻辑是否完全一致（排除平台差异代码后）。
+```
+
+---
+
+# 第七步：配置一致性验证
+
+## 🎯 目标
+
+确保配置、枚举、常量没有同步错乱。
+
+避免：
+
+* 枚举值错位
+* 常量含义不一致
+* feature flag 失效
+* 配置遗漏
+
+---
+
+## 💬 Prompt
+
+```text
+请确认修改过的配置类、常量定义、枚举值等在两个分支中的定义和用法是否保持一致。
+```
+
+---
+
+# 🔒 Safe Sync Rules（推荐固定给 AI）
+
+```text
+1. NEVER modify platform-specific code.
+2. NEVER overwrite fusion-only logic.
+3. NEVER sync unrelated formatting changes.
+4. NEVER change public APIs unless explicitly required.
+5. Only output patch + rationale.
+6. If uncertain, output:
+⚠️ MANUAL REVIEW REQUIRED
+```
+
+---
+
+# 📋 推荐 AI 输出格式
+
+建议 AI 始终输出：
+
+## 1. Change Analysis
+
+| Method         | Changed | Risk | Notes             |
+| -------------- | ------- | ---- | ----------------- |
+| calculateTotal | Yes     | Low  | Tax logic updated |
+
+---
+
+## 2. Proposed Patch
+
+统一 diff patch。
+
+---
+
+## 3. Rationale
+
+解释为什么安全。
+
+---
+
+## 4. Risk Flags
+
+列出：
+
+* 平台边界
+* API 修改
+* 配置修改
+* 不确定逻辑
+
+---
+
+# 🧪 推荐验证顺序
+
+```text
+1. Compile
+2. Unit Test
+3. Integration Test
+4. Core Service Audit
+5. Config Validation
+6. Smoke Test
+```
+
+---
+
+# 📌 关键注意事项
+
+## 1. 不要一次同步太多文件
+
+推荐：
+
+* 每次 1~3 个文件
+* 每次不超过 300 行核心逻辑
+
+否则 AI 极易遗漏。
+
+---
+
+## 2. 平台代码必须提前标记
+
+推荐添加：
+
+```java
+// PLATFORM: ANDROID
+```
+
+或：
+
+```java
+@PlatformSpecific
+```
+
+否则 AI 无法稳定识别。
+
+---
+
+## 3. AI 不可信，必须人工 Review
+
+AI 的职责：
+
+* 加速 diff
+* 识别业务改动
+* 生成 patch
+
+人的职责：
+
+* 判断业务意图
+* 确认平台边界
+* 审核关键逻辑
+
+---
+
+## 4. Low Confidence 禁止直接合并
+
+如果 AI 输出：
+
+```text
+Confidence: Low
+```
+
+必须：
+
+* 重新分析
+* 缩小同步范围
+* 人工 review
+
+---
+
+# 🧩 推荐搭配使用
+
+| 文件                       | 用途      |
+| ------------------------ | ------- |
+| `prompt-sync-file.md`    | 安全同步单文件 |
+| `prompt-audit-method.md` | 核心方法审计  |
+| `README.md`              | 流程说明    |
+
+---
+
+# ✅ 最终目标
+
+通过本流程，实现：
+
+* AI 辅助安全同步
+* 保留平台差异
+* 降低人工 diff 成本
+* 提升多分支维护效率
+* 减少回归风险
+
+---
+
+# 📄 License
+
+MIT
