@@ -456,6 +456,330 @@ Confidence: Low
 
 ---
 
+# 🏗️ Architecture
+
+```text
+develop branch
+    ↓
+diff extraction
+    ↓
+AI semantic analysis
+    ↓
+platform filtering
+    ↓
+safe patch generation
+    ↓
+human review
+    ↓
+compile & test
+    ↓
+audit
+    ↓
+merge
+```
+
+---
+
+# ❓ Why Not Direct Merge?
+
+很多团队会问：
+
+```text
+为什么不直接 git merge / cherry-pick？
+```
+
+原因是：
+
+在多平台、多部署、多定制代码库中：
+
+* fusion 分支通常包含平台专属逻辑
+* develop 分支可能存在大量历史遗留差异
+* 直接 merge 极易覆盖平台代码
+* cherry-pick 无法理解“业务逻辑”和“平台逻辑”的区别
+* AI 需要的是“语义级同步”，而不是纯文本 merge
+
+---
+
+## ✅ 适用场景
+
+* Android / iOS 多平台代码
+* SaaS / 私有化部署
+* 国内版 / 海外版
+* OEM 定制版本
+* 长生命周期维护分支
+* 多租户业务版本
+
+---
+
+## ❌ 不适用场景
+
+以下情况建议直接使用：
+
+* git merge
+* rebase
+* cherry-pick
+
+而不是本 workflow：
+
+* 普通 feature branch
+* 短生命周期开发分支
+* 无平台差异项目
+* 无定制逻辑项目
+
+---
+
+# 🧪 Example Workflow
+
+## 场景示例
+
+### develop 分支
+
+```java
+public BigDecimal calculateTotal(Order order) {
+    return order.getAmount().multiply(new BigDecimal("1.13"));
+}
+```
+
+新增：
+
+* 税费计算逻辑
+
+---
+
+### fusion 分支
+
+```java
+public BigDecimal calculateTotal(Order order) {
+    // PLATFORM: ANDROID
+    if (isAndroidChannel(order)) {
+        return androidCalculator.calculate(order);
+    }
+
+    return order.getAmount();
+}
+```
+
+存在：
+
+* Android 平台特殊逻辑
+
+---
+
+### AI 输出结果
+
+```diff
+ public BigDecimal calculateTotal(Order order) {
+     // PLATFORM: ANDROID
+     if (isAndroidChannel(order)) {
+         return androidCalculator.calculate(order);
+     }
+ 
+-    return order.getAmount();
++    return order.getAmount().multiply(new BigDecimal("1.13"));
+ }
+```
+
+---
+
+## ✅ 最终效果
+
+* 保留 Android 平台逻辑
+* 同步 develop 的税费计算
+* 不覆盖 fusion 特殊代码
+
+---
+
+# ❌ Common AI Failure Cases
+
+## Case 1：覆盖平台代码
+
+### 错误行为
+
+AI 直接使用 develop 文件覆盖 fusion 文件。
+
+### 风险
+
+* 平台逻辑丢失
+* 线上行为异常
+* 编译失败
+
+### 解决方案
+
+* 提前标记平台代码
+* 强制 AI 只输出 patch
+* 禁止 whole-file overwrite
+
+---
+
+## Case 2：误同步历史遗留差异
+
+### 错误行为
+
+AI 将旧 diff 识别为本次业务修改。
+
+### 风险
+
+* 引入脏代码
+* 产生未知行为变化
+
+### 解决方案
+
+* 必须限定时间范围
+* 必须先生成 commit diff 清单
+
+---
+
+## Case 3：误改 Public API
+
+### 错误行为
+
+AI 修改：
+
+* 方法签名
+* DTO 字段
+* 接口返回值
+
+### 风险
+
+* 编译失败
+* 调用方崩溃
+
+### 解决方案
+
+固定规则：
+
+```text
+NEVER change public APIs.
+```
+
+---
+
+## Case 4：删除 Import
+
+### 错误行为
+
+AI 自动整理 import。
+
+### 风险
+
+* 编译失败
+* 注解丢失
+
+### 解决方案
+
+要求：
+
+```text
+Preserve import order.
+```
+
+---
+
+## Case 5：错误合并条件逻辑
+
+### 错误行为
+
+AI 修改：
+
+* if/else
+* switch
+* feature flag
+* fallback 逻辑
+
+### 风险
+
+* 隐性业务回归
+* 条件边界错误
+
+### 解决方案
+
+必须执行：
+
+* method audit
+* line-by-line diff
+* 核心逻辑 review
+
+---
+
+# 📑 Standard Output Template
+
+建议 AI 固定输出以下结构：
+
+```markdown
+## 1. Change Analysis
+
+## 2. Proposed Patch
+
+## 3. Rationale & Confidence
+
+## 4. Risk Flags
+```
+
+这样可以：
+
+* 稳定输出结构
+* 方便 review
+* 方便审计
+* 方便后续自动化
+
+---
+
+# 👨‍⚖️ Human-in-the-Loop Principle
+
+## 核心原则
+
+```text
+AI only proposes patches.
+Human reviewers make the final merge decision.
+```
+
+AI 的职责：
+
+* 提取业务 diff
+* 识别风险
+* 生成 patch
+* 提供审计建议
+
+人的职责：
+
+* 判断业务意图
+* 审核平台边界
+* 最终 merge 决策
+* 线上风险控制
+
+---
+
+# 📂 Recommended Examples Structure
+
+```text
+examples/
+ ├── before/
+ ├── after/
+ ├── prompts/
+ └── patches/
+```
+
+建议包含：
+
+* develop 原始文件
+* fusion 原始文件
+* AI prompt
+* AI patch
+* 最终结果
+
+---
+
+# 📂 Recommended Templates Structure
+
+```text
+templates/
+ ├── sync-analysis.md
+ ├── patch-output.md
+ └── audit-output.md
+```
+
+---
+
 # 📄 License
 
 MIT
